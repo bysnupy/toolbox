@@ -6,7 +6,7 @@
  #- Usage:   faces_table.py
  #+ History:
   #- 2016/08/04: v1.0 release
-  #- 2016/08/05: v1.1 release, adding feature which resize face images.
+  #- 2016/08/05: v1.1 release, adding feature which resizes face images.
 """
 
 import sys,csv,os,datetime
