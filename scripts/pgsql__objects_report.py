@@ -1,19 +1,25 @@
 #!/usr/bin/env python
+# vi: ft=python
+#==========================================
+# PostgreSQL object reporter
+# Version: 1.1
+#
+# History:
+# - 2017.6.30: adding trigger report section
+#
+'''
+Usage: diff old_report.txt new_report.txt
+'''
+
 from subprocess import Popen,PIPE
 import sys,datetime
 
-'''
-Usage: Comparing with new and old report.
-$ diff old_report new_report
-'''
-
-
 # initialize variables
 
-db_user='TARGET_DB_USER'
-db_name='TARGET_DB_PASS'
+db_user='DB_USERNAME'
+db_name='DB_NAME'
 db_adminuser='postgres'
-psql_cmd='/home/postgres/pgsql/bin/psql'
+psql_cmd='/usr/local/pgsql/bin/psql'
 
 date_suffix=datetime.datetime.today().strftime('%Y%m%d-%H%M')
 result_file='/tmp/%s_%s.report' % (db_name, date_suffix)
@@ -66,6 +72,10 @@ view_cnt_sql = "SELECT count(*) FROM pg_views WHERE viewowner = '%s'" % db_user
 proc_check_sql = "SELECT p.proname FROM pg_proc p JOIN pg_user u ON p.proowner = u.usesysid WHERE u.usename <> '%s' ORDER BY p.proname DESC" % db_adminuser
 proc_cnt_sql = "SELECT count(*) FROM pg_proc p JOIN pg_user u ON p.proowner = u.usesysid WHERE u.usename <> '%s'" % db_adminuser
 
+## Trggers
+trg_check_sql = "SELECT tgname FROM pg_trigger ORDER BY tgname DESC"
+trg_cnt_sql   = "SELECT count(*) FROM pg_trigger"
+
 
 table_name_list = get_result(table_check_sql)
 seq_name_list = get_result(seq_check_sql)
@@ -82,12 +92,15 @@ section1 = '''
 ##### 1.4. Views           #########################################################
 %s
 ##### 1.5. Procedures      #########################################################
+%s
+##### 1.6. Triggers        #########################################################
 %s''' % (
 table_name_list,
 get_result(index_check_sql),
 seq_name_list,
 get_result(view_check_sql),
-get_result(proc_check_sql)
+get_result(proc_check_sql),
+get_result(trg_check_sql)
 )
 file.write(section1)
 print section1
@@ -116,7 +129,8 @@ index_cnt = get_result(index_cnt_sql)
 seq_cnt  = get_result(seq_cnt_sql)
 view_cnt = get_result(view_cnt_sql)
 proc_cnt = get_result(proc_cnt_sql)
-total_cnt = int(table_cnt) + int(index_cnt) + int(seq_cnt) + int(view_cnt) + int(proc_cnt)
+trg_cnt  = get_result(trg_cnt_sql)
+total_cnt = int(table_cnt) + int(index_cnt) + int(seq_cnt) + int(view_cnt) + int(proc_cnt) + int(trg_cnt)
 
 summary = '''
 ###################### 4. Summary #################################################
@@ -126,10 +140,11 @@ summary = '''
   4.3. Sequence  counts     : %s
   4.4. View      counts     : %s
   4.5. Procedure counts     : %s
+  4.6. Trigger   counts     : %s
 -----------------------------------------------------------------------------------
   Total object counts       : %s
 ''' % (
-table_cnt, index_cnt, seq_cnt, view_cnt, proc_cnt, str(total_cnt)
+table_cnt, index_cnt, seq_cnt, view_cnt, proc_cnt, trg_cnt, str(total_cnt)
 )
 
 file.write(summary)
@@ -137,4 +152,3 @@ print summary
 
 file.close()
 print 'Done.'
-
