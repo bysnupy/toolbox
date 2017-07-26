@@ -1,0 +1,392 @@
+-- check the autovacuum configurations
+SELECT *,
+n_dead_tup > av_threshold AS "av_needed",
+CASE WHEN reltuples > 0
+THEN round(100.0 * n_dead_tup / (reltuples))
+ELSE 0
+END
+AS pct_dead
+FROM
+(SELECT
+N.nspname,
+C.relname,
+pg_stat_get_tuples_inserted(C.oid) AS n_tup_ins,
+pg_stat_get_tuples_updated(C.oid) AS n_tup_upd,
+pg_stat_get_tuples_deleted(C.oid) AS n_tup_del,
+pg_stat_get_live_tuples(C.oid) AS n_live_tup,
+pg_stat_get_dead_tuples(C.oid) AS n_dead_tup,
+C.reltuples AS reltuples,
+round(current_setting('autovacuum_vacuum_threshold')::integer + current_setting('autovacuum_vacuum_scale_factor')::numeric * C.reltuples)AS av_threshold,
+date_trunc('minute',greatest(pg_stat_get_last_vacuum_time(C.oid),
+pg_stat_get_last_autovacuum_time(C.oid))) AS last_vacuum, date_trunc('minute',greatest(pg_stat_get_last_analyze_time(C.oid),
+pg_stat_get_last_analyze_time(C.oid))) AS last_analyze
+FROM pg_class C
+LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+WHERE C.relkind IN ('r', 't')
+AND N.nspname NOT IN ('pg_catalog', 'information_schema') AND
+N.nspname !~ '^pg_toast'
+) AS av
+ORDER BY av_needed DESC,n_dead_tup DESC;
+
+-- check the INDEX to bloat
+SELECT
+nspname,relname,
+round(100 * pg_relation_size(indexrelid) / pg_relation_size(indrelid)) / 100 AS index_ratio,
+pg_size_pretty(pg_relation_size(indexrelid)) AS index_size,
+pg_size_pretty(pg_relation_size(indrelid)) AS table_size
+FROM pg_index I
+LEFT JOIN pg_class C ON (C.oid = I.indexrelid)
+LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+WHERE
+nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND C.relkind='i' AND pg_relation_size(indrelid) > 0;
+
+-- check the INDEX SCAN ration
+SELECT
+schemaname,
+relname,
+seq_scan,
+idx_scan,
+cast(idx_scan AS numeric) / (idx_scan + seq_scan) AS idx_scan_pct
+FROM pg_stat_user_tables
+WHERE (idx_scan + seq_scan) > 0 
+ORDER BY idx_scan_pct
+
+-- check the tuples per INDEX SCAN
+SELECT
+relname,
+seq_tup_read,
+idx_tup_fetch,
+cast(idx_tup_fetch AS numeric) / (idx_tup_fetch + seq_tup_read) AS idx_tup_pct
+FROM pg_stat_user_tables
+WHERE (idx_tup_fetch + seq_tup_read) > 0
+ORDER BY idx_tup_pct
+
+-- check the efficiency of HOT update for TABLE
+SELECT
+relname,
+n_tup_upd,
+n_tup_hot_upd,
+cast(n_tup_hot_upd AS numeric) / n_tup_upd AS hot_pct
+FROM pg_stat_user_tables
+WHERE n_tup_upd>0
+ORDER BY hot_pct
+
+-- check the DML counts of TABLE
+SELECT
+relname,
+cast(n_tup_ins AS numeric) / (n_tup_ins + n_tup_upd + n_tup_del) AS ins_pct,
+cast(n_tup_upd AS numeric) / (n_tup_ins + n_tup_upd + n_tup_del) AS upd_pct,
+cast(n_tup_del AS numeric) / (n_tup_ins + n_tup_upd + n_tup_del) AS del_pct
+FROM pg_stat_user_tables
+WHERE (n_tup_ins + n_tup_upd + n_tup_del) > 0
+ORDER BY relname
+
+-- check cache hit ratio
+SELECT
+relname,
+cast(heap_blks_hit as numeric) / (heap_blks_hit + heap_blks_read) AS hit_pct,heap_blks_hit,
+heap_blks_read
+FROM pg_statio_user_tables
+WHERE (heap_blks_hit + heap_blks_read)>0
+ORDER BY hit_pct;
+
+-- check INDEX cache hit ratio
+SELECT
+relname,
+cast(idx_blks_hit as numeric) / (idx_blks_hit + idx_blks_read) AS hit_pct,
+idx_blks_hit,
+idx_blks_read
+FROM pg_statio_user_tables
+WHERE (idx_blks_hit + idx_blks_read)>0
+ORDER BY hit_pct;
+
+-- check the read IO status including TOAST blocks
+SELECT *,
+(heap_blks_read + toast_blks_read + tidx_blks_read) AS total_blks_read,
+(heap_blks_hit + toast_blks_hit + tidx_blks_hit) AS total_blks_hit
+FROM pg_statio_user_tables;
+
+-- check the INDEX RANGE SCAN statistics
+SELECT
+indexrelname,
+cast(idx_tup_read AS numeric) / idx_scan AS avg_tuples,
+idx_scan,
+idx_tup_read
+FROM pg_stat_user_indexes
+WHERE idx_scan > 0;
+
+-- check the INDEX usage counts
+SELECT
+schemaname,
+relname,
+indexrelname,
+idx_scan,
+pg_size_pretty(pg_relation_size(i.indexrelid)) AS index_size
+FROM
+pg_stat_user_indexes i
+JOIN pg_index USING (indexrelid)
+WHERE
+indisunique IS false
+ORDER BY idx_scan,relname;
+
+-- check the block IO statistics per Databases
+SELECT
+datname,
+blks_read,
+blks_hit,
+tup_returned,
+tup_fetched,
+tup_inserted,
+tup_updated,
+tup_deleted
+FROM pg_stat_database;
+
+-- check the TRANSACTION statistics per Databases
+SELECT
+datname,
+numbackends,
+xact_commit,
+xact_rollback
+FROM pg_stat_database;
+
+-- check the valid session counts
+SELECT
+count(*)
+FROM pg_stat_activity
+WHERE NOT procpid=pg_backend_pid();
+
+-- check the long-term transactions
+SELECT
+pid,
+waiting,
+current_timestamp - least(query_start,xact_start) AS runtime,substr(query,1,25) AS query
+FROM pg_stat_activity
+WHERE NOT pid=pg_backend_pid();
+
+-- check the locking states
+SELECT
+locktype,
+virtualtransaction,
+transactionid,
+nspname,
+relname,
+mode,
+granted,
+cast(date_trunc('second',query_start) AS timestamp) AS query_start,
+substr(query,1,25) AS query
+FROM
+pg_locks
+LEFT OUTER JOIN pg_class ON (pg_locks.relation = pg_class.oid)
+LEFT OUTER JOIN pg_namespace ON (pg_namespace.oid = pg_class.
+relnamespace),
+pg_stat_activity
+WHERE
+NOT pg_locks.pid=pg_backend_pid() AND
+pg_locks.pid=pg_stat_activity.pid;
+
+-- check the watings due to locking - pid and user level
+SELECT
+locked.pid AS locked_pid,
+locker.pid AS locker_pid,
+locked_act.usename AS locked_user,
+locker_act.usename AS locker_user,
+locked.virtualtransaction,
+locked.transactionid,
+locked.locktype
+FROM
+pg_locks locked,
+pg_locks locker,
+pg_stat_activity locked_act,
+pg_stat_activity locker_act
+WHERE
+locker.granted=true AND
+locked.granted=false AND
+locked.pid=locked_act.pid AND
+locker.pid=locker_act.pid AND
+(locked.virtualtransaction=locker.virtualtransaction OR
+locked.transactionid=locker.transactionid);
+
+-- check the waitings due to locking - table level
+SELECT
+locked.pid AS locked_pid,
+locker.pid AS locker_pid,
+locked_act.usename AS locked_user,
+locker_act.usename AS locker_user,
+locked.virtualtransaction,
+locked.transactionid,
+relname
+FROM
+pg_locks locked
+LEFT OUTER JOIN pg_class ON (locked.relation = pg_class.oid),
+pg_locks locker,
+pg_stat_activity locked_act,
+pg_stat_activity locker_act
+WHERE
+locker.granted=true AND
+locked.granted=false AND
+locked.pid=locked_act.pid AND
+locker.pid=locker_act.pid AND
+locked.relation=locker.relation;
+
+-- calculating the table and index sizes
+SELECT
+nspname,
+relname,
+relkind as "type",
+pg_size_pretty(pg_table_size(C.oid)) AS size,
+pg_size_pretty(pg_indexes_size(C.oid)) AS idxsize,
+pg_size_pretty(pg_total_relation_size(C.oid)) as "total"
+FROM pg_class C
+LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND
+nspname !~ '^pg_toast' AND
+relkind IN ('r','i')
+ORDER BY pg_total_relation_size(C.oid) DESC;
+
+-- check the backend IO statistics
+SELECT
+(100 * checkpoints_req) / (checkpoints_timed + checkpoints_req) AS checkpoints_req_pct,
+pg_size_pretty(buffers_checkpoint * block_size / (checkpoints_timed + checkpoints_req)) AS avg_checkpoint_write,
+pg_size_pretty(block_size * (buffers_checkpoint + buffers_clean + buffers_backend)) AS total_written,
+100 * buffers_checkpoint / (buffers_checkpoint + buffers_clean + buffers_backend) AS checkpoint_write_pct,
+100 * buffers_backend / (buffers_checkpoint + buffers_clean + buffers_backend) AS backend_write_pct,
+*
+FROM pg_stat_bgwriter,(SELECT cast(current_setting('block_size') AS
+integer) AS block_size) AS bs;
+
+-- check the current cached tables - required pg_buffercache module
+SELECT
+c.relname,
+count(*) AS buffers
+FROM pg_class c
+INNER JOIN pg_buffercache b
+ON b.relfilenode=c.relfilenode
+INNER JOIN pg_database d
+ON (b.reldatabase=d.oid AND d.datname=current_database())
+GROUP BY c.relname
+ORDER BY 2 DESC
+LIMIT 20;
+
+-- check the cache usage and frequency - required pg_buffercache module
+SELECT
+usagecount,
+count(*),
+isdirty
+FROM pg_buffercache
+GROUP BY isdirty,usagecount
+ORDER BY isdirty,usagecount;
+
+-- check the cached object sizes - required pg_buffercache module
+SELECT
+c.relname,
+pg_size_pretty(count(*) * 8192) as buffered,
+round(100.0 * count(*) / (SELECT setting FROM pg_settings WHERE name='shared_buffers')::integer,1) AS buffers_percent,
+round(100.0 * count(*) * 8192 / pg_relation_size(c.oid),1) AS percent_of_relation
+FROM pg_class c
+INNER JOIN pg_buffercache b
+ON b.relfilenode = c.relfilenode
+INNER JOIN pg_database d
+ON (b.reldatabase = d.oid AND d.datname = current_database())
+WHERE relpages > 0
+GROUP BY c.oid,c.relname
+ORDER BY 3 DESC
+LIMIT 20;
+
+-- check the frequency of using cache per the cached objects
+SELECT
+c.relname,
+count(*) AS buffers,usagecount
+FROM pg_class c
+INNER JOIN pg_buffercache b
+ON b.relfilenode = c.relfilenode
+INNER JOIN pg_database d
+ON (b.reldatabase = d.oid AND d.datname = current_database())
+GROUP BY c.relname,usagecount
+ORDER BY c.relname,usagecount;
+
+-- check the Database size and shared_buffer parameter values
+SELECT
+current_database() AS datname,
+pg_size_pretty(pg_database_size(current_database())),
+setting AS shared_buffers,
+pg_size_pretty((SELECT setting FROM pg_settings WHERE name='block_size')::int8 * setting::int8) AS size
+FROM pg_settings
+WHERE name = 'shared_buffers';
+
+-- check the table size to bloat for decision of FULL VACUUM
+SELECT * 
+FROM 
+(SELECT 
+pg_namespace.nspname, 
+pg_class.relname, 
+pg_class.reltuples, 
+pg_class.relpages, 
+rowwidths.avgwidth, 
+ceil(pg_class.reltuples * rowwidths.avgwidth::double precision / current_setting('block_size'::text)::double precision) AS expectedpages, 
+pg_class.relpages::double precision / ceil(pg_class.reltuples * 
+rowwidths.avgwidth::double precision / current_setting('block_size'::text)::double precision) AS bloat, 
+ceil((pg_class.relpages::double precision * current_setting('block_size'::text)::double precision - ceil(pg_class.reltuples * rowwidths.avgwidth::double precision)) / 1024::double precision) AS wastedspace
+FROM 
+ (SELECT 
+  pg_statistic.starelid, 
+  sum(pg_statistic.stawidth) AS avgwidth
+  FROM pg_statistic
+  GROUP BY pg_statistic.starelid) rowwidths
+JOIN pg_class ON rowwidths.starelid = pg_class.oid
+JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+WHERE pg_class.relpages > 1 ) relbloat 
+ORDER BY wastedspace desc;
+
+-- check the INDEX size to bloat - verbose version
+SELECT
+schemaname, tablename, reltuples::bigint, relpages::bigint, otta,
+ROUND(CASE WHEN otta=0 THEN 0.0 ELSE sml.relpages/otta::numeric END,1) AS tbloat,
+relpages::bigint - otta AS wastedpages,
+bs*(sml.relpages-otta)::bigint AS wastedbytes,
+pg_size_pretty((bs*(relpages-otta))::bigint) AS wastedsize,
+iname, ituples::bigint, ipages::bigint, iotta,
+ROUND(CASE WHEN iotta=0 OR ipages=0 THEN 0.0 ELSE ipages/iotta::numeric END,1) AS ibloat,
+      CASE WHEN ipages < iotta THEN 0 ELSE ipages::bigint - iotta END AS wastedipages,
+      CASE WHEN ipages < iotta THEN 0 ELSE bs*(ipages-iotta) END AS wastedibytes,
+      CASE WHEN ipages < iotta THEN pg_size_pretty(0::bigint) ELSE pg_size_pretty((bs*(ipages-iotta))::bigint) END AS wastedisize
+FROM (
+       SELECT
+       schemaname, tablename, cc.reltuples, cc.relpages, bs,
+       CEIL((cc.reltuples*((datahdr+ma-(CASE WHEN datahdr%ma=0 THEN ma ELSE datahdr%ma END))+nullhdr2+4))/(bs-20::float)) AS otta,
+             COALESCE(c2.relname,'?') AS iname, COALESCE(c2.reltuples,0) AS ituples, COALESCE(c2.relpages,0) AS ipages,
+             COALESCE(CEIL((c2.reltuples*(datahdr-12))/(bs-20::float)),0) AS iotta -- very rough approximation, assumes all cols
+       FROM (
+              SELECT
+              ma,bs,schemaname,tablename,
+              (datawidth+(hdr+ma-(case when hdr%ma=0 THEN ma ELSE hdr%ma END)))::numeric AS datahdr,
+              (maxfracsum*(nullhdr+ma-(case when nullhdr%ma=0 THEN ma ELSE nullhdr%ma END))) AS nullhdr2
+              FROM (
+                     SELECT
+                     schemaname, tablename, hdr, ma, bs,
+                     SUM((1-null_frac)*avg_width) AS datawidth,
+                     MAX(null_frac) AS maxfracsum,
+                     hdr+(
+                           SELECT 1+count(*)/8
+                           FROM pg_stats s2
+                           WHERE null_frac<>0 AND s2.schemaname = s.schemaname AND s2.tablename = s.tablename
+                          ) AS nullhdr
+                    FROM pg_stats s, (
+                                       SELECT
+                                       (SELECT current_setting('block_size')::numeric) AS bs,
+                                       CASE WHEN substring(v,12,3) IN ('8.0','8.1','8.2') THEN 27 ELSE 23 END AS hdr,
+                                       CASE WHEN v ~ 'mingw32' THEN 8 ELSE 4 END AS ma
+                                       FROM (SELECT version() AS v) AS foo
+                                     ) AS constants
+                    GROUP BY 1,2,3,4,5
+              ) AS foo
+       ) AS rs
+       JOIN pg_class cc ON cc.relname = rs.tablename
+       JOIN pg_namespace nn ON cc.relnamespace = nn.oid AND nn.nspname = rs.schemaname
+       LEFT JOIN pg_index i ON indrelid = cc.oid
+       LEFT JOIN pg_class c2 ON c2.oid = i.indexrelid
+) AS sml
+WHERE sml.relpages - otta > 0 OR ipages - iotta > 10
+ORDER BY wastedbytes DESC, wastedibytes DESC;
+
+
+
