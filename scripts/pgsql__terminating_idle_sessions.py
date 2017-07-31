@@ -5,7 +5,7 @@ import sys,datetime
 
 """
 Purpose: Terminating idle session more than specific times
-Return value:  Terminating session counts
+Return value:  Terminated session counts
 """
 
 # variables
