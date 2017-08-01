@@ -847,7 +847,7 @@ order by
  ,operation
  ,object_name;
 
--- if 'select min(SAMPLE_TIME),max(SAMPLE_TIME) from v$active_session_history;' is empty, you should replace the 'gv$active_session_history' with 'dba_hist_active_sess_history'
+--extract SQLs about CPU time high usgae if 'select min(SAMPLE_TIME),max(SAMPLE_TIME) from v$active_session_history;' is empty, you should replace the 'gv$active_session_history' with 'dba_hist_active_sess_history'
 accept starttime prompt 'inspection start time [ex 12-07-05 08:00:00] : '
 accept endtime prompt 'instpection end time[ex 12-07-05 08:03:00] : '
 accept min_cputime prompt 'specify the minimum CPU milliseonds (e.g. 10000 = 10 secs) : '
