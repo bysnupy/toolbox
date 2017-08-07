@@ -5,7 +5,7 @@
 
 debug_opt=""
 
-[ "$1" == "--debug" ] && debug_opt="--debug"
+[ "$1" == "--debug" ] && debug_opt=$1
 
 # initiate as removed temporary files
 rm -rf /var/lib/cloud/* 
