@@ -2,7 +2,10 @@
 
 # sysbench package required
 # 
-#####################################
+# usage: shell [cpu|mem|io]
+#        non-option executes all tests(cpu,mem,io)
+# 
+##################################################################
 
 # test time (seconds)
 sample_num=10
@@ -30,30 +33,47 @@ function fileio(){
   sysbench --time=$sample_num --file-test-mode=rndrd fileio cleanup &> /dev/null
 }
 
-# Main processing secion
+# cpu test wrapper
+function cpu_test(){
+  echo "cpu"
 
-echo "cpu"
+  for cnt in $(seq $sample_num)
+  do
+    echo ${cnt},$(cpu)
+    sleep 1
+  done
+}
 
-for cnt in $(seq $sample_num)
-do
-  echo ${cnt},$(cpu)
-  sleep 1
-done
+# memory test wrapper
+function mem_test(){
+  echo "memory"
 
-echo "memory"
+  for cnt in $(seq $sample_num)
+  do
+    echo ${cnt},$(memory)
+    sleep 1
+  done
+}
 
-for cnt in $(seq $sample_num)
-do
-  echo ${cnt},$(memory)
-  sleep 1
-done
+# io test wrapper
+function io_test(){
+  echo "fileio"
 
-echo "fileio"
+  for cnt in $(seq $sample_num)
+  do
+    echo ${cnt},$(fileio)
+  done
+}
 
-for cnt in $(seq $sample_num)
-do
-  echo ${cnt},$(fileio)
-done
+# main processes
 
+case "$1" in
+  cpu) cpu_test ;;
+  mem) mem_test ;;
+  io)  io_test ;;
+  *)   cpu_test
+       mem_test
+       io_test ;;
+esac
 
 exit 0
