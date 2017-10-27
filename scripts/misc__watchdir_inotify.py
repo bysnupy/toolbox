@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+# 
+# Watch up: fs.inotify.max_user_watches and fs.inotify.max_user_instances; (lsof | grep -c inotify) it counts opend files by inotify
 # Required inotiyfy api
 # Usage: arg1: target directory
 #
