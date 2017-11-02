@@ -12,12 +12,13 @@
 from __future__   import print_function
 from ovirtsdk.api import API
 from ovirtsdk.xml import params
+from time         import sleep
 import pickle,sys
 
 # variables for authentication
-webconsole_url  = 'https://WEBCONSOLE_HOSTNAME/ovirt-engine/api'
-user_and_domain = 'USERNAME@DOMAIN'
-user_password   = 'PASSWORD'
+webconsole_url  = 'https://vctrl01.commerce21.co.jp/ovirt-engine/api'
+user_and_domain = 'admin@internal'
+user_password   = 'vC21mgr'
 
 api = API(url=webconsole_url, username=user_and_domain, password=user_password, insecure=True)
 
@@ -65,18 +66,17 @@ if pickle_mode == 'load':
     cnt += 1
     # if the action mode is start
     if action == 'start':
-      api.get(vm).start()
+      api.vms.get(vm).start()
       print ("%s Starting %s VM" % (str(cnt), vm))
-      while api.get(vm).status.state != 'up':
-        print ('.', end="")
+      while api.vms.get(vm).status.state != 'up':
         sleep(1)
     # if the action mode is stop
     elif action == 'stop':
-      api.get(vm).stop()
+      api.vms.get(vm).stop()
       print ("%s Stopping %s VM" % (str(cnt), vm))
-      while api.get(vm).status.state != 'down':
-        print ('-', end="")
+      while api.vms.get(vm).status.state != 'down':
         sleep(1)
     # just list the vm names
     else:
       print ("%s\t%s" % (str(cnt), vm))
+
