@@ -15,9 +15,9 @@ from ovirtsdk.xml import params
 import pickle,sys
 
 # variables for authentication
-webconsole_url  = 'https://vctrl01.commerce21.co.jp/ovirt-engine/api'
-user_and_domain = 'admin@internal'
-user_password   = 'vC21mgr'
+webconsole_url  = 'https://WEBCONSOLE_HOSTNAME/ovirt-engine/api'
+user_and_domain = 'USERNAME@DOMAIN'
+user_password   = 'PASSWORD'
 
 api = API(url=webconsole_url, username=user_and_domain, password=user_password, insecure=True)
 
