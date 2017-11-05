@@ -23,15 +23,14 @@ do
        BEGIN { printf "%s ",strftime("%H:%M:%S", systime()); conn_counts=0; }
        { if ( target == $4 && "ESTAB" == $1 ) conn_counts+=1; }
        END { print conn_counts; }'
-       sleep $interval
        ;;
     netstat) /usr/sbin/netstat -tna | awk -v target=$1 '
        BEGIN { printf "%s ",strftime("%H:%M:%S", systime()); conn_counts=0; }
        { if ( target == $4 && "ESTABLISHED" == $6 ) conn_counts+=1; }
        END { print conn_counts; }'
-       sleep $interval
        ;;
     esac
+    sleep $interval
 done
 
 exit $?
