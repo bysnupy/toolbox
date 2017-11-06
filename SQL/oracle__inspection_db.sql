@@ -1,4 +1,4 @@
--- extract general database information, version, block size, character set and so on
+-- extract general database information, version, block size, character set and so on.
 set linesize 200
 prompt
 prompt *** db version
