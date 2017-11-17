@@ -158,7 +158,7 @@ rowwidths.avgwidth,
 ceil(pg_class.reltuples * rowwidths.avgwidth::double precision / current_setting('block_size'::text)::double precision) AS expectedpages, 
 pg_class.relpages::double precision / ceil(pg_class.reltuples * 
 rowwidths.avgwidth::double precision / current_setting('block_size'::text)::double precision) AS bloat, 
-ceil((pg_class.relpages::double precision * current_setting('block_size'::text)::double precision - ceil(pg_class.reltuples * rowwidths.avgwidth::double precision)) / 1024::double precision) AS wastedspace
+ceil((pg_class.relpages::double precision * current_setting('block_size'::text)::double precision - ceil(pg_class.reltuples * rowwidths.avgwidth::double precision)) / 1024::double precision) AS kb_wastedspace
 FROM 
  (SELECT 
   pg_statistic.starelid, 
