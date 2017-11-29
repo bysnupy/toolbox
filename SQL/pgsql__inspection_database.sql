@@ -168,7 +168,7 @@ FROM
 JOIN pg_class ON rowwidths.starelid = pg_class.oid
 JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
 WHERE pg_class.relpages > 1 ) relbloat 
-ORDER BY wastedspace desc;
+ORDER BY kb_wastedspace desc;
 
 -- check the INDEX size to bloat - verbose version
 SELECT
