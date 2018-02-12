@@ -15,7 +15,6 @@
 #   GUEST_VM3"
 #)
 
-
 # variables
 myvm_home=/usr/local/bin
 vm_list_file=${myvm_home}/myvm.list
@@ -25,8 +24,8 @@ usage_txt="Usage: ${0##*/} [list|start|stop] <vm group name>"
 # functions
 function list_vm {
   cnt=0
+  echo -e "No.\tvm group name"
   for list_name in "${!myvm_list[@]}"; do
-    echo -e "No.\tvm group name"
     python -c "print('-'*60)"
     echo -e "$(( cnt=${cnt} + 1)).\t${list_name}"
   done
@@ -53,7 +52,7 @@ function show_ip {
   for vm in $(virsh list --state-running --name); do
     echo -e " $(( cnt = ${cnt} + 1 )).\tVM name:\t${vm}"
     virsh domifaddr ${vm} | sed -e '1,2d'
-  done
+  done 
 }
 
 # main
@@ -64,7 +63,8 @@ case $1 in
   ;;
   start) start_vm $2
   ;;
-  stop) stop_vm $2  ;;
+  stop) stop_vm $2
+  ;;
   ip) show_ip
   ;;
   *) echo "${usage_txt}"
@@ -72,5 +72,3 @@ case $1 in
 esac
 
 exit $?
-
-
