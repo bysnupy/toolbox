@@ -28,6 +28,7 @@ function list_vm {
   for list_name in "${!myvm_list[@]}"; do
     python -c "print('-'*60)"
     echo -e "$(( cnt=${cnt} + 1)).\t${list_name}"
+    echo
   done
 }
 
