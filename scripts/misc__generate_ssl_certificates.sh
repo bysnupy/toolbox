@@ -33,7 +33,7 @@ function mk_signed_cert() {
 
 # main
 
-mkca
+mk_ca
 mk_signed_cert
 
 exit $?
