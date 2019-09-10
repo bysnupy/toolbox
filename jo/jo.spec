@@ -1,7 +1,7 @@
 Name:           jo
 Version:        1.2
 Release:        1%{?dist}
-Summary:        jo is a small utility to create JSON objects
+Summary:        A small utility to create JSON objects
 Group:          Applications/Text
 License:        GPLv2+
 URL:            https://github.com/jpmens/jo
@@ -32,3 +32,5 @@ make %{?_smp_mflags}
 %doc COPYING AUTHORS README
 
 %changelog
+* Tue Sep 10 2019 Daein Park <bysnupy@hotmail.com> - 1.2
+- Initial RPM at 1.2
